@@ -1,0 +1,97 @@
+
+Written by Patrick Kelly
+
+=========================================================================
+
+Set environmental variables: 
+
+#1
+
+BIGMACS
+to the path of the installation directory
+
+e.g., setenv BIGMACS /Users/ronald/big-macs-calibrate/ (tcsh shell)
+      
+      BIGMACS=/Users/ronald/big-macs-calibrate/ (bash shell)
+      export BIGMACS  
+
+#2 
+add installation directory to PYTHONPATH
+
+e.g., setenv PYTHONPATH $BIGMACS:PYTHONPATH (tcsh shell)
+
+      PYTHONPATH=$BIGMACS:PYTHONPATH
+      export PYTHONPATH  
+
+=========================================================================
+
+Usage:
+
+Run program w/o arguments to get listing of possible 
+command line arguments (e.g., python fit_locus.py)
+
+=========================================================================
+
+Required Python packages:
+
+pylab
+scipy
+sqlcl.py copy included (queries SDSS database written by Tamas Budavari, JHU -- need version that searches at least DR8which is set by the astro_url and public_url variables) 
+
+=========================================================================
+
+Acknowledgements:
+
+We use the Munari SED to estimate extinction
+
+=========================================================================
+
+Quick Start:
+
+Ingredients:
+
+    (1) FITS catalog with columns for stellar magnitudes and magnitude errors.
+    Include columns with RA and DEC if interested in automatically matching
+    against the SDSS or 2MASS catalogs.
+
+    (2) Need to find/make totla transmission function for filters used in 
+    observations. FILTERS folder contains examples for several telescopes.
+
+    (3) Create a configuration file. Here you will specify the names
+    of the magnitude and magnitude error columns in the FITS catalog. 
+    You will need to specify whether to HOLD or VARY the zeropoint 
+    for each filter. If you choose to HOLD the zeropoint for a filter,
+    you will need to specify any zeropoint offset you would like to 
+    apply to the magnitudes for that filter during fit (generally 0 if
+    the magnitudes are calibrated). At least one filter will need to 
+    have the zeropoint held fixed.
+
+Example:
+
+    python fit_locus.py --file ./EXAMPLES/MACS1347-11.stars.calibrated.cat --columns ./EXAMPLES/MACS1347-11.columns --extension 1 --bootstrap 5 --liveplot True     (run here from the installation directory)
+
+    extension is the number or name of the extension of the table with the necessary magnitudes in the FITS file
+    liveplot is responsible for whether 
+    (type python fit_locus.py for other arguments)
+
+
+=========================================================================
+
+
+not currently available in public release:
+    Generate a new spectroscopic locus:                                                              
+    
+    execute CasJobs_query 
+    makes e.g., SLR_2MASS_pkelly50.fit which contains extinction-corrected stellar magnitudes
+    
+    first run measure_locus.py 
+    measure running median of colors indexed by g'-i' color
+    makes lociCAS_2MASS (pickled Python object)
+    then run make_spectroscopic_locus.py 
+    takes lociCAS_2MASS (pickled Python object)
+    makes spectra in LOCUS_SPECTRA  
+    
+    then run fit_locus.py 
+    takes spectra in LOCUS_SPECTRA
+    makes expected locus for filter set
+
