@@ -1,1 +1,0 @@
-/nfs/slac/g/ki/ki04/pkelly/bpz-1.99.2/FILTER/WHT-0-1-U.res

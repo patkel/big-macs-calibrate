@@ -1,1 +1,0 @@
-/nfs/slac/g/ki/ki04/pkelly/bpz-1.99.2/FILTER/SUBARU-10_1-1-W-S-G+.res
