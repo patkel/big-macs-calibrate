@@ -69,7 +69,7 @@ def join_cats(cs,outputfile):
     print outputfile
     hdulist.writeto(outputfile)
 
-def get_survey_stars(inputcat, racol, deccol, necessary_columns, survey='SDSS', sdssUnit=False): 
+def get_survey_stars(inputcat, racol, deccol, necessary_columns, EBV, survey='SDSS', sdssUnit=False): 
 
     import scipy, pyfits, math
 
@@ -78,7 +78,7 @@ def get_survey_stars(inputcat, racol, deccol, necessary_columns, survey='SDSS', 
     print 'WILL SEARCH FOR STARS WITHIN ' + str(RADIUS) + ' OF ' + str(RA) + ' ' + str(DEC)
 
     if survey == 'SDSS':
-        colors = ['u','g','r','i','z']                                                                                                                                                                                                                                                                                                                                                                                                        
+        colors = ['u','g','r','i','z']   
         color_AB = [['u',-0.04],['g',0],['r',0],['i',0],['z',0.02]]
 
         ''' includes conversion to Pogson magnitudes from luptitudes '''
@@ -156,10 +156,11 @@ def get_survey_stars(inputcat, racol, deccol, necessary_columns, survey='SDSS', 
 
             elif line[0] != '#' and line[0] != '|' and line[0] != '\\':
                 for key in saveKeys:
-                    value = line[keyDict[key]['indexStart']:keyDict[key]['indexEnd']]
-                    catalogStars[key].append(float(value))
-                    
-
+                    value = float(line[keyDict[key]['indexStart']:keyDict[key]['indexEnd']])
+                    if key == 'j_m':
+                        ''' correct J magnitude for extinction '''
+                        value = value - EBV * 0.709
+                    catalogStars[key].append(value)
         
         if catalogStars.values()[0]:
             print 'NO USABLE 2MASS DATA FOUND, PROCEEDING' 
@@ -451,18 +452,21 @@ def run(file,columns_description,output_directory=None,plots_directory=None,exte
 
     RA, DEC, RADIUS = get_catalog_parameters(fulltable, racol, deccol) 
 
+    if RA is not None and DEC is not None:
+        EBV, gallong, gallat = galactic_extinction_and_coordinates(RA,DEC)
+
     #add in projection
     #inputcat.data.field(racol) - RA)**2. + (inputcat.data.field(deccol) - DEC)**2.)**0.5
 
     fitSDSS = False
     foundSDSS = 0 
     if addSDSS:
-        fulltable, foundSDSS, necessary_columns = get_survey_stars(fulltable, racol, deccol, necessary_columns, survey='SDSS', sdssUnit=sdssUnit)
+        fulltable, foundSDSS, necessary_columns = get_survey_stars(fulltable, racol, deccol, necessary_columns, EBV, survey='SDSS', sdssUnit=sdssUnit)
         if foundSDSS: fitSDSS = True
 
     found2MASS = 0 
     if add2MASS:
-        fulltable, found2MASS, necessary_columns = get_survey_stars(fulltable, racol, deccol, necessary_columns, survey='2MASS')
+        fulltable, found2MASS, necessary_columns = get_survey_stars(fulltable, racol, deccol, necessary_columns, EBV, survey='2MASS')
         if found2MASS: fit2MASS = True
 
     if output_directory is None:
@@ -541,7 +545,7 @@ def run(file,columns_description,output_directory=None,plots_directory=None,exte
     extinction_info = {}
 
     if RA is not None and DEC is not None:
-        EBV, gallong, gallat = galactic_extinction_and_coordinates(RA,DEC)
+        #EBV, gallong, gallat = galactic_extinction_and_coordinates(RA,DEC)
                                                                            
         for i in range(len(input_info)):
             print input_info[i]['mag']
