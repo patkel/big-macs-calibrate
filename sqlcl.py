@@ -15,8 +15,8 @@ formats = ['csv','xml','html']
 astro_url='http://cas.sdss.org/astro/en/tools/search/x_sql.asp'
 public_url='http://cas.sdss.org/public/en/tools/search/x_sql.asp'
 
-astro_url='http://skyserver.sdss3.org/dr8/en/tools/search/x_sql.asp'
-public_url='http://skyserver.sdss3.org/dr8/en/tools/search/x_sql.asp'
+astro_url='http://skyserver.sdss3.org/dr9/en/tools/search/x_sql.asp'
+public_url='http://skyserver.sdss3.org/dr9/en/tools/search/x_sql.asp'
 
 
 default_url=astro_url

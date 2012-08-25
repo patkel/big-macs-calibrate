@@ -27,8 +27,8 @@ e.g., setenv PYTHONPATH $BIGMACS:PYTHONPATH (tcsh shell)
 
 Usage:
 
-Run program w/o arguments to get listing of possible 
-command line arguments (e.g., python fit_locus.py)
+Run "python fit_locus.py --help" to get list of possible
+command line arguments 
 
 =========================================================================
 
@@ -52,7 +52,8 @@ Ingredients:
 
     (1) FITS catalog with columns for stellar magnitudes and magnitude errors.
     Include columns with RA and DEC if interested in automatically matching
-    against the SDSS or 2MASS catalogs.
+    against the SDSS or 2MASS catalogs. You will need to specify the names of the
+    RA and DEC columns (e.g., -r X_WORLD -d Y_WORLD) on the command line.
 
     (2) Need to find/make totla transmission function for filters used in 
     observations. FILTERS folder contains examples for several telescopes.
@@ -68,15 +69,53 @@ Ingredients:
 
 Example:
 
-    python fit_locus.py --file ./EXAMPLES/MACS1347-11.stars.calibrated.cat --columns ./EXAMPLES/MACS1347-11.columns --extension 1 --bootstrap 5 --liveplot True     (run here from the installation directory)
+    1) CALIBRATE ONLY COLORS (no SDSS or 2MASS magnitudes): 
 
-    extension is the number or name of the extension of the table with the necessary magnitudes in the FITS file
-    liveplot is responsible for whether 
-    (type python fit_locus.py for other arguments)
+        python fit_locus.py --file ./EXAMPLES/MACS1347-11.stars.calibrated.cat --columns ./EXAMPLES/MACS1347-11.columns --extension 1 --bootstrap 5 --liveplot True     (run here from the installation directory) 
+        extension is the number or name of the extension of the table with the necessary magnitudes in the FITS file
+        liveplot is responsible for whether 
+        (type python fit_locus.py for other arguments)
+
+    2)
+        python fit_locus.py --file ./EXAMPLES/MACS1423+24.stars.calibrated.cat --columns ./EXAMPLES/MACS1423+24.qc.columns --extension 1 --bootstrap 5 --liveplot True     (run here from the installation directory) 
+
+    3) CALIBRATE ABSOLUTE ZP w/ 2MASS
+        python fit_locus.py --file ./EXAMPLES/kpno.fits --columns ./EXAMPLES/kpno.columns --extension 1 --bootstrap 5 --liveplot True -r ALPHA_J2000_reg2_i -d DELTA_J2000_reg2_i -j
+
 
 
 =========================================================================
 
+ESSENTIAL TIPS:
+
+    Need to specify output directory (e.g., --output ~/) in order to save plots for fit
+
+    Set bad magnitudes equal to +-99 (flagged measurements, saturated stars etc.)
+
+    Be wary at low Galatic latitude and high extinction, especially when using all available SDSS
+    filters/magnitudes. Code uses extinction curve to estimate what the SDSS magnitudes would
+    be _behind_ the dust -- that assumption may not be correct.
+
+    A kink in the _observed_ locus is important for accurate calibration.  
+
+    Does not yet work for u-band calibration (ask Pat) 
+
+    FILTER functions should not be in the optical
+
+    Yields an AB calibration (not Vega)
+
+    The 2MASS locus is not synthesized from the spectroscopic model. If you
+    would like to match against 2MASS then the name of the filter transmission
+    function needs to be J2MASS.res so that Big MACS can assign the correct locus.
+
+    Can only use 2MASS when there are enough 2MASS matches (problem is bright stars are saturated in science images)
+
+=========================================================================
+
+REMOVED MySQLdb dependence
+
+
+=========================================================================
 
 not currently available in public release:
     Generate a new spectroscopic locus:                                                              

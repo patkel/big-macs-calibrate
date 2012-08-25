@@ -3,7 +3,7 @@
 
 if __name__ != '__main__':
     print 'importing modules'
-    import os, re, string, MySQLdb, pylab
+    import os, re, string, pylab
     import pyfits, random, scipy, commands, anydbm
     from scipy import linalg
     from scipy import optimize
@@ -13,10 +13,25 @@ if __name__ != '__main__':
     print 'finished importing modules'
     #import_lib()
 
-
-
 global itr
 itr = 0
+
+def fix_kpno():
+    
+    p = pyfits.open('./EXAMPLES/kpno.fits')
+
+    for color in ['g','r','i','z']: 
+        mask = p[1].data['FLAGS_reg1_' + color] != 0  
+        p[1].data['MAG_APERCORR_reg1_' + color][mask] = 99
+
+        mask = p[1].data['IMAFLAGS_ISO_reg1_' + color] != 0  
+        print mask
+        p[1].data['MAG_APERCORR_reg1_' + color][mask] = 99
+
+    p.writeto('./EXAMPLES/kpno_fixed.fits')
+        
+
+
 
 def join_cats(cs,outputfile):
     import pyfits
@@ -54,132 +69,153 @@ def join_cats(cs,outputfile):
     print outputfile
     hdulist.writeto(outputfile)
 
-
-
-
-
-
-
-
-def get_sdss_stars(inputcat, racol, deccol): 
+def get_survey_stars(inputcat, racol, deccol, necessary_columns, survey='SDSS', sdssUnit=False): 
 
     import scipy, pyfits, math
 
-    RA = scipy.median(inputcat.data.field(racol))
-    DEC = scipy.median(inputcat.data.field(deccol))
+    RA, DEC, RADIUS = get_catalog_parameters(inputcat, racol, deccol) 
 
-    colors = ['u','g','r','i','z']
+    print 'WILL SEARCH FOR STARS WITHIN ' + str(RADIUS) + ' OF ' + str(RA) + ' ' + str(DEC)
 
-    #dict_names = ['ra', 'dec'] + ['psfFlux_' + c for c in colors] + ['ext_' + c for c in colors] + ['psfFluxErr_' + c for c in colors] + ['psfMag_' + c for c in colors] + ['psfPog_' + c for c in colors] + ['psfPogErr_' + c for c in colors]
+    if survey == 'SDSS':
+        colors = ['u','g','r','i','z']                                                                                                                                                                                                                                                                                                                                                                                                        
+        color_AB = [['u',-0.04],['g',0],['r',0],['i',0],['z',0.02]]
 
-    color_AB = [['u',-0.04],['g',0],['r',0],['i',0],['z',0.02]]
+        ''' includes conversion to Pogson magnitudes from luptitudes '''
+        keys = ['ra','dec']
+        keys += ['psfMag_%(color)s - extinction_%(color)s + %(AB).2f as psfMagCorr_%(color)s' % {'color':color,'AB':AB} for color, AB in color_AB ] 
+        keys += ['psfMagErr_%(color)s' % {'color':color,'AB':AB} for color, AB in color_AB ] 
+        keys += ['-2.5*LOG10(psfFlux_%(color)s) + 22.5 - extinction_%(color)s + %(AB).2f as psfPogCorr_%(color)s' % {'color':color,'AB':AB} for color, AB in color_AB ] 
+        keys += ['1.085/SQRT(psfFluxIvar_%(color)s)/psfFlux_%(color)s as psfPogErr_%(color)s' % {'color':color,'AB':AB} for color, AB in color_AB ] 
 
-    keys = ['ra','dec']
-    keys += ['psfMag_%(color)s - extinction_%(color)s + %(AB).2f as psfMagCorr_%(color)s' % {'color':color,'AB':AB} for color, AB in color_AB ] 
-    keys += ['psfMagErr_%(color)s' % {'color':color,'AB':AB} for color, AB in color_AB ] 
-    keys += ['-2.5*LOG10(psfFlux_%(color)s) + 22.5 - extinction_%(color)s + %(AB).2f as psfPogCorr_%(color)s' % {'color':color,'AB':AB} for color, AB in color_AB ] 
-    keys += ['1.085/SQRT(psfFluxIvar_%(color)s)/psfFlux_%(color)s as psfPogErr_%(color)s' % {'color':color,'AB':AB} for color, AB in color_AB ] 
+        wherekeys = ['psfFlux_%(color)s > 0 ' % {'color':color,'AB':AB} for color, AB in color_AB ] 
+        import sqlcl
+        ''' includes AB correction and extinction correction , require g mag (luptitude) error less than 0.1  '''   
+        #query = 'select ra, dec, s.psfMag_u - extinction_u - 0.04, s.psfMag_g - extinction_g, s.psfMag_r - extinction_r, s.psfMag_i - extinction_i, s.psfMag_z - extinction_z + 0.02, s.psfMagErr_u, s.psfMagErr_g, s.psfMagErr_r, s.psfMagErr_i, s.psfMagErr_z from star as s JOIN dbo.fGetNearbyObjEq(' + str(RA) + ',' + str(DEC) + ',' + str(RADIUS) + ' ) AS GN ON s.objID = GN.objID where s.clean=1 and s.psfMagErr_g < 0.1' # and s.psfMagErr_z < 0.1'
+        query = 'select ' + reduce(lambda x,y: x + ',' + y, keys) + ' from star as s JOIN dbo.fGetNearbyObjEq(' + str(RA) + ',' + str(DEC) + ',' + str(RADIUS) + ' ) AS GN ON s.objID = GN.objID where s.clean=1 and ' + reduce(lambda x,y: x + ' and ' + y,wherekeys) 
+
+        ''' cannot query SDSS database more than once per second '''
+        print query
+        lines = sqlcl.query(query).readlines()
+        #print lines
+        print len(lines) - 1, 'STAR(S) FOUND'
+        print lines[0]
+
+        returned_keys = re.split('\,',lines[0][:-1])
+        saveKeys = returned_keys[2:]
+        print returned_keys
+
+        ''' make a array with empty list with an entry for each key '''
+        catalogStars = dict(zip(returned_keys,list([[] for x in returned_keys])))
+        print catalogStars.keys()
+
+        if lines[0] == 'N' or len(lines) -1  < 5:
+            print 'NO USABLE SDSS DATA FOUND, PROCEEDING' 
+            matched = False
+            returnCat = inputcat
+        else:
+            matched = True
+            for line in lines[1:]:
+                line = line.replace('\n','')
+                res = re.split(',',line)
+                for i in range(len(res)): 
+                    catalogStars[returned_keys[i]].append(float(res[i]))  
 
 
-    wherekeys = ['psfFlux_%(color)s > 0 ' % {'color':color,'AB':AB} for color, AB in color_AB ] 
+    elif survey == '2MASS':
 
-    #wherekeys += ['psfMagErr_%(color)s < 0.3 ' % {'color':color,'AB':AB} for color, AB in color_AB ] 
+        coordinate = str(RA) + '+' + str(DEC)
+        catalog = '2MASS_stars.cat'
 
+        ''' NOTE 2MASS MAGS NOT CORRECTED FOR DUST -- SHOULD BE CORRECTED '''
 
-    import sqlcl
-    #query = 'select ra, dec, s.psfFlux_u, s.psfFlux_g, s.psfFlux_r, s.psfFlux_i, s.psfFlux_z, extinction_u, extinction_g, extinction_r, extinction_i, extinction_z, s.psfMagErr_u, s.psfMagErr_g, s.psfMagErr_r, s.psfMagErr_i, s.psfMagErr_z, psfMag_u, psfMag_g, psfMag_r, psfMag_i, psfMag_z from star as s JOIN dbo.fGetNearbyObjEq(' + str(RA) + ',' + str(DEC) + ', 15) AS GN ON s.objID = GN.objID where s.clean=1'
+        ''' select 2MASS stars with ph_qual=A for J band (includes a S/N cut) and use_src=1 '''
+        command = "wget \"http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=1&objstr=" + coordinate + "&spatial=Cone&radius=" + str(RADIUS) + "&radunits=arcmin&catalog=fp_psc&selcols=ph_qual,ra,dec,j_m,j_cmsig&constraints=ph_qual+like+%27A__%27+and+use_src%3D1\" -O "  + catalog
+        print command
 
-    ''' includes AB correction and extinction correction , require g mag (luptitude) error less than 0.1  '''	
-    query = 'select ra, dec, s.psfMag_u - extinction_u - 0.04, s.psfMag_g - extinction_g, s.psfMag_r - extinction_r, s.psfMag_i - extinction_i, s.psfMag_z - extinction_z + 0.02, s.psfMagErr_u, s.psfMagErr_g, s.psfMagErr_r, s.psfMagErr_i, s.psfMagErr_z from star as s JOIN dbo.fGetNearbyObjEq(' + str(RA) + ',' + str(DEC) + ', 15) AS GN ON s.objID = GN.objID where s.clean=1 and s.psfMagErr_g < 0.1' # and s.psfMagErr_z < 0.1'
+        import os
+        os.system(command)
 
+        lines = open(catalog,'r').readlines()
+       
+        keyDict = {} 
+        saveKeys = ['ra','dec','j_m','j_cmsig']
+        for line in lines:
+            if line[0] == '|' and keyDict == {}:
+                returned_keys_full = re.split('\|',line)[1:]
+                returned_keys = [r.replace(' ','') for r in returned_keys_full]
+                index = 1
+                for key_full in returned_keys_full:
+                    indexStart = index 
+                    index += len(key_full) + 1
+                    indexEnd = index  
+                
+                    keyDict[key_full.replace(' ','')] = {'indexStart': indexStart, 'indexEnd': indexEnd}
 
-    query = 'select ' + reduce(lambda x,y: x + ',' + y, keys) + ' from star as s JOIN dbo.fGetNearbyObjEq(' + str(RA) + ',' + str(DEC) + ', 15) AS GN ON s.objID = GN.objID where s.clean=1 and ' + reduce(lambda x,y: x + ' and ' + y,wherekeys) 
+                catalogStars = dict(zip(returned_keys,list([[] for x in returned_keys])))
 
-    #and psfFlux_u > 0 and psfFlux_g > 0 and psfFlux_r > 0 and psfFlux_i > 0 and psfFlux_z > 0' 
+            elif line[0] != '#' and line[0] != '|' and line[0] != '\\':
+                for key in saveKeys:
+                    value = line[keyDict[key]['indexStart']:keyDict[key]['indexEnd']]
+                    catalogStars[key].append(float(value))
+                    
 
+        
+        if catalogStars.values()[0]:
+            print 'NO USABLE 2MASS DATA FOUND, PROCEEDING' 
+            matched = False 
+            returnCat = inputcat
+        else: 
+            matched = True
 
-#'abs(s.psfFluxIvar_u/s.psfFlux_u) < 0.1 and abs(s.psfFluxErr_g/s.psfFlux_g) < 0.1 and abs(s.psfFluxErr_r/s.psfFlux_r) < 0.1 and abs(s.psfFluxErr_i/s.psfFlux_i) < 0.1 and abs(s.psfFluxErr_z/s.psfFlux_z) < 0.1'
-
-
-
-    ''' cannot query SDSS database more than once per second '''
-    print query
-    lines = sqlcl.query(query).readlines()
-    print lines
-    print len(lines) - 1, 'STAR(S) FOUND'
-
-    print lines[0]
-
-    returned_keys = re.split('\,',lines[0][:-1])
-
-    print returned_keys
-
-    sdss = dict(zip(returned_keys,list([[] for x in returned_keys])))
-
-    print sdss.keys()
-
-    if lines[0] == 'N' or len(lines) -1  < 5:
-
-        print 'NO USABLE SDSS DATA FOUND, PROCEEDING' 
-        matchedSDSS = False
-        returnCat = inputcat
-
-    else:
-
-        for line in lines[1:]:
-            line = line.replace('\n','')
-            res = re.split(',',line)
-            for i in range(len(res)): 
-                sdss[returned_keys[i]].append(float(res[i]))  
-
+    if matched:
         #pylab.plot([14,26],[14,26], color='red')
         #pylab.errorbar(sdss['psfMagCorr_u'], sdss['psfPogCorr_u'],yerr=sdss['psfPogErr_u'],fmt=None)
         #pylab.errorbar(sdss['psfMagCorr_u'], sdss['psfPogCorr_u'],yerr=sdss['psfPogErr_u'],fmt=None)
         #pylab.scatter(sdss['psfMagCorr_u'], sdss['psfPogCorr_u'])
         #pylab.xlabel('asinh')
         #pylab.ylabel('pogson')
-
         #pylab.show()
 
         print 'making KDTrees'                                                                                                                                                                                                                                  
-        if False:
-            ''' make a catalog of all SDSS stars '''                                                         
+        if survey == 'SDSS' and sdssUnit:
+            ''' make a catalog of all SDSS stars (i.e., not just those matched against catalog stars) '''                                                         
 
             cols = []
             for column_name in returned_keys[2:]: 
-                cols.append(pyfits.Column(name=column_name,format='1E',array=scipy.array(sdss[column_name])))
-
-
+                cols.append(pyfits.Column(name=column_name,format='1E',array=scipy.array(catalogStars[column_name])))
 
             coldefs = pyfits.ColDefs(cols)
             hdu_new = pyfits.new_table(coldefs)
 
             returnCat = hdu_new
 
-            matchedSDSS = True
+            matched = True
 
         else:
-
             from scipy import spatial 
-            data_sdss = zip(sdss['ra'],sdss['dec'])
-
+            data_catalog = zip(catalogStars['ra'],catalogStars['dec'])
 
             data_inputcat = zip(inputcat.data.field(racol),inputcat.data.field(deccol))
 
-            kdtree_sdss = spatial.KDTree(data_sdss)
+            kdtree_catalog = spatial.KDTree(data_catalog)
             kdtree_inputcat = spatial.KDTree(data_inputcat)
-            match = kdtree_sdss.query_ball_tree(kdtree_inputcat,2./3600.)
+            match = kdtree_catalog.query_ball_tree(kdtree_inputcat,2./3600.)
+
             print match
 
-            ''' make catalog with same number of row as inputcat and columns for sdss mags  '''
+            ''' make catalog with same number of row as inputcat and columns for catalog mags  '''
             rows = len(inputcat.data)
-            print returned_keys 
 
             cols = []
-            for column in inputcat.columns:
-                cols.append(column)
+            for column_name in necessary_columns: #inputcat.columns:
+                #cols.append(column)
+                cols.append(pyfits.Column(name=column_name,format='1E',array=inputcat.data.field(column_name)))
 
-            for column_name in returned_keys[2:]: 
+
+            necessary_columns += saveKeys
+
+            for column_name in saveKeys: 
                 array = scipy.ones(rows) * -99
                 cols.append(pyfits.Column(name=column_name,format='1E',array=array))
 
@@ -191,24 +227,28 @@ def get_sdss_stars(inputcat, racol, deccol):
             for i in range(len(match)):
                 if len(match[i]) == 1:
                     matchedStars += 1
-                    for column_name in returned_keys[2:]: 
-                        hdu_new.data.field(column_name)[match[i][0]] = sdss[column_name][i]
-                    
-            hdu = pyfits.PrimaryHDU()
-            hdulist = pyfits.HDUList([hdu,hdu_new])
-            print len(match)
-            import os
-            os.system('rm merge.fits')
-            hdulist.writeto('merge.fits')
-            returnCat = hdu_new
-
+                    for column_name in saveKeys: 
+                        hdu_new.data.field(column_name)[match[i][0]] = catalogStars[column_name][i]
 
             ''' require at least five matched stars '''
-            if matchedStars > 5:
-                matchedSDSS = True   
-            else: matchedSDSS = False
-    
-    return returnCat, matchedSDSS
+            if matchedStars > 3:
+                matched = matchedStars 
+                hdu = pyfits.PrimaryHDU()               
+                hdulist = pyfits.HDUList([hdu,hdu_new])
+                print len(match)
+                import os
+                os.system('rm merge.fits')
+                hdulist.writeto('merge.fits')
+                returnCat = hdu_new
+
+            else: 
+                print str(matchedStars) + ' MATCHES WITH ' + survey  + ' CATALOG'
+                returnCat = inputcat
+                matched = 0 
+   
+    print returnCat
+ 
+    return returnCat, matched, necessary_columns
 
 def update_database(ebv,extinction_info,gallat,results,zps_dict_all,snpath,run,night='work_night',prefix=''):
     import scamp
@@ -378,7 +418,24 @@ def get_kit():
     locus = m.load()
     return locus
 
-def run(file,columns_description,output_directory=None,plots_directory=None,extension='OBJECTS',racol=None,deccol=None,end_of_locus_reject=1,plot_iteration_increment=50, min_err=0.02, bootstrap_num=0, snpath=None, night=None, run=None, prefix='',data_from_sdss=False, live_plot=False, addSDSS=False, number_of_plots=10):
+
+def get_catalog_parameters(fulltable, racol, deccol):
+    ''' calculate field center '''
+
+    import scipy
+
+    DEC = scipy.median(fulltable.data.field(deccol))
+    DEC_DIFF_SQ = ((fulltable.data.field(deccol) - DEC) * 60.)**2.
+
+    RA = scipy.median(fulltable.data.field(racol))
+    RA_DIFF_SQ = ((fulltable.data.field(racol) - RA) * 60. * scipy.cos(DEC))**2.
+
+    RADII = (DEC_DIFF_SQ + RA_DIFF_SQ)**0.5
+
+    return RA, DEC, RADII.max() 
+
+
+def run(file,columns_description,output_directory=None,plots_directory=None,extension='OBJECTS',racol=None,deccol=None,end_of_locus_reject=1,plot_iteration_increment=50, min_err=0.02, bootstrap_num=0, snpath=None, night=None, run=None, prefix='',data_from_sdss=False, live_plot=False, addSDSS=False, number_of_plots=10, add2MASS=False, sdssUnit=False):
 
     try: 
         extension = int(extension)
@@ -387,18 +444,26 @@ def run(file,columns_description,output_directory=None,plots_directory=None,exte
     print 'trying to open file', file
     fulltable = pyfits.open(file)[extension]
 
-    ''' calculate field center '''
-    RA = scipy.median(fulltable.data.field(racol))
-    DEC = scipy.median(fulltable.data.field(deccol))
+    input_info = utilities.parse_columns(columns_description)
+    necessary_columns = [racol, deccol] + [x['mag'] for x in input_info] + [x['mag_err'] for x in input_info]
+
+    print necessary_columns
+
+    RA, DEC, RADIUS = get_catalog_parameters(fulltable, racol, deccol) 
 
     #add in projection
     #inputcat.data.field(racol) - RA)**2. + (inputcat.data.field(deccol) - DEC)**2.)**0.5
 
     fitSDSS = False
-    foundSDSS = False
+    foundSDSS = 0 
     if addSDSS:
-        fulltable, foundSDSS = get_sdss_stars(fulltable, racol, deccol)
+        fulltable, foundSDSS, necessary_columns = get_survey_stars(fulltable, racol, deccol, necessary_columns, survey='SDSS', sdssUnit=sdssUnit)
         if foundSDSS: fitSDSS = True
+
+    found2MASS = 0 
+    if add2MASS:
+        fulltable, found2MASS, necessary_columns = get_survey_stars(fulltable, racol, deccol, necessary_columns, survey='2MASS')
+        if found2MASS: fit2MASS = True
 
     if output_directory is None:
         fs = file.split('/')
@@ -412,24 +477,48 @@ def run(file,columns_description,output_directory=None,plots_directory=None,exte
 
     reload(utilities)
 
-
     ''' if SDSS stars, hold no other filter ZPs fixed (avoid tension) '''
     if addSDSS and foundSDSS:
-        input_info = utilities.parse_columns(columns_description,fitSDSS=False,noHoldExceptSDSS=True)
+        #input_info = utilities.parse_columns(columns_description,fitSDSS=False,noHoldExceptSDSS=True)
+        for i in range(len(input_info)):
+            input_info[i]['HOLD_VARY'] = 'VARY'
+
+        if sdssUnit: 
+            ''' include only SDSS magnitudes in unit test '''
+            input_info = [] 
+
         sdss_info = [{'mag':'psfPogCorr_' + c, 'plotName':'SDSS ' + c, 'filter': 'SDSS-' + c + '.res', 'mag_err': 'psfPogErr_' + c, 'HOLD_VARY':'HOLD', 'ZP':0.} for c in ['g','r','i','z'] ]
+
         for filt_dict in sdss_info:
             ''' avoid duplicate filters -- will override '''
             if filt_dict['mag'] not in [f['mag'] for f in input_info]:
                 input_info += [filt_dict]
-    else: 
-        input_info = utilities.parse_columns(columns_description,fitSDSS=False)
+
+        ''' if SDSS unit test, hold only z-band zeropoint constant '''            
+        if sdssUnit:
+            for i in range(len(input_info)):                
+                if input_info[i]['mag'] != 'psfPogCorr_z': 
+                    input_info[i]['HOLD_VARY'] = 'VARY'
+
+    if add2MASS and found2MASS:
+        ''' if no SDSS, see if there are 2MASS matches '''
+        #input_info = utilities.parse_columns(columns_description,fitSDSS=False,noHoldExcept2MASS=True)
+        for i in range(len(input_info)):
+            input_info[i]['HOLD_VARY'] = 'VARY'
+
+        sdss_info = [{'mag':'j_m', 'plotName':'2MASS J', 'filter': 'J2MASS.res', 'mag_err': 'j_cmsig', 'HOLD_VARY':'HOLD', 'ZP':0.} ]
+        for filt_dict in sdss_info:
+            ''' avoid duplicate filters -- will override '''
+            if filt_dict['mag'] not in [f['mag'] for f in input_info]:
+                input_info += [filt_dict]
 
 
-    print input_info
-
-    ''' check to see if at least one filter is held constant '''
+    
+    ''' check to see if at least one but not all filter is held constant '''
     if not filter(lambda x: x['HOLD_VARY'] == 'HOLD', input_info): 
         raise Exception('None of your magnitudes is held fixed (i.e., HOLD_VARY HOLD)')
+    if not filter(lambda x: x['HOLD_VARY'] == 'VARY', input_info): 
+        raise Exception('All of your magnitudes are held fixed (i.e., HOLD_VARY VARY)')
 
     filters = utilities.get_filters([[a['mag'], a['filter']] for a in input_info])
 
@@ -463,15 +552,22 @@ def run(file,columns_description,output_directory=None,plots_directory=None,exte
             extinction_info[input_info[i]['mag']] = extinction
             print input_info[i]['mag'], extinction, ' (mag) in field', coeff
 
-
-
-
-            
     print 'INPUT FILTERS:', [a['filter'] for a in input_info]
 
-
+    print input_info
     mag_locus = utilities.synthesize_expected_locus_for_observations(input_info)
 
+    print mag_locus
+
+    if False:
+        import pickle , pylab                                                                                                                                          
+        pylab.scatter(fulltable.data.field('psfPogCorr_z') - fulltable.data.field('j_m'), fulltable.data.field('psfPogCorr_i') - fulltable.data.field('psfPogCorr_z'))
+        f = open('lociCAS','r')
+        m = pickle.Unpickler(f)
+        locus_list_mag = m.load()
+        print locus_list_mag.keys()
+        pylab.scatter(locus_list_mag['ZSDSS_JTMASS'][:],locus_list_mag['ISDSS_ZSDSS'][:],color='green')
+        pylab.show()
 
     if False:
         import pickle, os                                            
@@ -637,26 +733,34 @@ def run(file,columns_description,output_directory=None,plots_directory=None,exte
         print results
         print zps_dict_all
 
-  
+ 
+    output_string = '' 
+
     if foundSDSS: 
-        offset_list_file.write('#  USED SDSS STARS \n')
+        output_string += '#  USED ' + str(foundSDSS) + ' MATCHED SDSS STARS \n'
+    if found2MASS:
+        output_string += '#  USED ' + str(found2MASS) + ' MATCHED 2MASS STARS \n'
 
-    offset_list_file.write('# ' + str(gallat) + ' ' + str(gallong) + ' galactic latitude longitude \n')
-    offset_list_file.write('# ' + str(results['redchi']) + ' reduced chi squared value \n')
-    offset_list_file.write('# ' + str(results['num']) + ' number of stars \n')
+    output_string += '# ' + str(gallat) + ' ' + str(gallong) + ' galactic latitude longitude \n'
+    output_string += '# ' + str(results['redchi']) + ' reduced chi squared value \n'
+    output_string += '# ' + str(results['num']) + ' number of stars \n'
 
-    print 'RESULTS: (ADD THESE ZP ADJUSTMENTS TO CATALOG MAGNITUDES) '
+    output_string += '# RESULTS: (ADD THESE ZP ADJUSTMENTS TO CATALOG MAGNITUDES) \n'
     for key in zps_dict_all.keys():    
-        print key + ' ' + str(zps_dict_all[key]) + ' ' + str(zps_dict_all_err[key]) + ' ' + cal_type[key]
-        offset_list_file.write(key + ' ' + str(zps_dict_all[key]) + ' +- ' + str(zps_dict_all_err[key]) + ' ' + cal_type[key] + '\n')              
+        #print key + ' ' + str(zps_dict_all[key]) + ' ' + str(zps_dict_all_err[key]) + ' ' + cal_type[key]
+        output_string += key + ' ' + str(zps_dict_all[key]) + ' +- ' + str(zps_dict_all_err[key]) + ' ' + cal_type[key] + '\n'              
 
     ''' write out the magnitude zeropoints that were held constant during the fit '''
     for filt_hold in info_hold:    
-        print filt_hold['mag'] + ' HELD ' + str(filt_hold['ZP'])  
-        offset_list_file.write(filt_hold['mag'] + ' ' + str(filt_hold['ZP']) + ' +- -99 ' + cal_type[key] + '\n')              
-    
+        #print filt_hold['mag'] + ' HELD ' + str(filt_hold['ZP'])  
+        output_string += filt_hold['mag'] + ' ' + str(filt_hold['ZP']) + ' +- -99 ' + cal_type[key] + '\n'              
+   
+    print output_string
+ 
     print 'NUMBER OF BOOTSTRAPS:', bootstrap_num
     print 'IF ERROR IS -99, NEED TO HAVE > 1 BOOTSTRAP'
+
+    offset_list_file.write(output_string)
     offset_list_file.close()
 
     print 'LIST OF ZEROPOINTS WRITTEN TO', offset_list
@@ -705,38 +809,6 @@ def fit(table, input_info_unsorted, mag_locus,
     pylab.rcParams.update(params_pylab)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     if live_plot: 
         pylab.ion()
 
@@ -754,18 +826,6 @@ def fit(table, input_info_unsorted, mag_locus,
 
     print zps
 
-    
-    
-    
-    
-    
-    
-    
-
-
-    
-
-    
     number_locus_points = len(mag_locus) 
     number_all_stars = len(table.field(input_info[0]['mag']))
 
@@ -1233,7 +1293,7 @@ def fit(table, input_info_unsorted, mag_locus,
 
             out = scipy.optimize.fmin(errfunc,pinit,maxiter=10000,maxfun=100000,ftol=0.00001,xtol=0.00001,args=()) 
             if iteration is 'full':
-                errfunc(out,savefig=(iteration+'_'+outliers+'.pdf').replace('$',''))
+                errfunc(out,savefig=(iteration+'_'+outliers+'.png').replace('$',''))
             #print out
 
             #print 'starting'        
@@ -1409,29 +1469,25 @@ if __name__ == '__main__':
     parser.add_option("-p","--plots",help="destination directory for plots, if different from /output directory/PLOTS",default=None)
     parser.add_option("-r","--racol",help="name of column in FITS file with object RA in DEGREES (default: X_WORLD)",default='X_WORLD')
     parser.add_option("-d","--deccol",help="name of column in FITS file with object DEC in DEGREES (default: XWORLD)",default='Y_WORLD')
-    parser.add_option("-l","--liveplot",help="show real-time plot of fit (default: True)",default=True)
-    parser.add_option("-s","--SN",help="snpath",default=None)
+    parser.add_option("-l","--liveplot",help="show real-time plot of fit (default: True)",action='store_true')
+    parser.add_option("-z","--SN",help="snpath",default=None)
     parser.add_option("-t","--run",help="run",default=None)
     parser.add_option("-n","--night",help="night",default=None)
-    parser.add_option("-a","--addSDSSgriz",action='store_true',help="automatically search for and add SDSS griz stellar photometry, if available")
+    parser.add_option("-s","--addSDSSgriz",action='store_true',help="automatically search for and add SDSS griz stellar photometry, if available")
+    parser.add_option("-j","--add2MASSJ",action='store_true',help="automatically search for and add 2MASS J stellar photometry, if available")
     parser.add_option("-w","--numberofplots",help="number of plots to make (default: 10)",default=10)
+    parser.add_option("-u","--sdssUnit",help="run SDSS unit test (only works if in coverage)",action='store_true')
     
     import sys
 
     args = sys.argv     
     
     #args = ['-f','stars.fits','-c','sdss.columns','-e','1','-a']
-
     #args = ['-f','A383.fits','-c','sdss.columns','-e','1','0','-a']
-
     #args = ['-f','MACS0717+37.stars.calibrated.cat','-c','sdss.columns','-e','1','-b','0','-a']
-
     #args = ['-f','HDFN.fits','-c','sdss.columns','-e','1','-b','0','-a']
-
     #args = ['-f','A2552.stars.calibrated.cat','-c','A2552.columns','-e','1','-b','0']
-
     #args = ['-f','A2552.stars.calibrated.cat','-c','A2552.columns','-e','1','-b','0']
-
     #args = ['-f','MACS1347-11.stars.calibrated.cat','-c','MACS1347-11.columns','-e','1','-b','0','-l','False']
 
     (options, args) = parser.parse_args(args)
@@ -1444,7 +1500,7 @@ if __name__ == '__main__':
         parser.error('you must specify the extension of the input FITS catalog containing the stellar magnitudes')
 
     print 'importing libraries'
-    import os, re, string, MySQLdb, pylab
+    import os, re, string, pylab
     import pyfits, random, scipy, commands, anydbm
     from scipy import linalg
     from scipy import optimize
@@ -1452,5 +1508,8 @@ if __name__ == '__main__':
     from copy import copy
     import utilities
     print 'finished importing libraries'
+
+    print options.liveplot
+    raw_input()
     
-    run(options.file,options.columns,output_directory=options.output,plots_directory=options.plots,extension=options.extension,racol=options.racol,deccol=options.deccol,bootstrap_num=options.bootstrap,live_plot=options.liveplot, addSDSS=options.addSDSSgriz,number_of_plots=options.numberofplots)    
+    run(options.file,options.columns,output_directory=options.output,plots_directory=options.plots,extension=options.extension,racol=options.racol,deccol=options.deccol,bootstrap_num=options.bootstrap,live_plot=options.liveplot, add2MASS=options.add2MASSJ, addSDSS=options.addSDSSgriz,number_of_plots=options.numberofplots, sdssUnit=options.sdssUnit)    

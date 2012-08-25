@@ -49,7 +49,7 @@ def readtxtfile(file):
 
 def synth(p,spectra,filters,show=False):
 
-    mags ={} 
+    mags = {} 
 
     for filt in filters:
         specall = scipy.zeros(len(spectra[0][0][:,1]))
@@ -59,7 +59,6 @@ def synth(p,spectra,filters,show=False):
             specStep = spec[1:,0] - spec[0:-1,0] # wavelength increment                   
             #print specStep[400:600], 'specStep'
             resampFilter = filt['spline'](spec[:,0]) # define an interpolating function
-
             #print resampFilter
             #print filt_name
 
@@ -84,10 +83,10 @@ def cas_locus(fits=True):
 
     if fits:
         import pyfits
-        locus_list_mag = pyfits.open('lociCAS_2MASS.fits')['STDTAB']
+        locus_list_mag = pyfits.open('lociCAS.fits')['STDTAB']
     else:
         import pickle
-        f = open(os.environ['BIGMACS'] + 'lociCAS_2MASS','r')
+        f = open(os.environ['BIGMACS'] + 'lociCAS','r')
         m = pickle.Unpickler(f)
         locus_list_mag = m.load()
 
@@ -114,13 +113,22 @@ def synthesize_expected_locus_for_observations(filters):
 
     for i in range(len(loci[:])):
         locus_point = loci[i]
+        locus_index = int(locus_point.replace('.dat',''))
         print 'CONVOLVING RESPONSE FUNCTIONS WITH SPECTRUM ' + str(locus_point)
         stitchSpec = scipy.genfromtxt(os.environ['BIGMACS'] + '/LOCUS_SPECTRA/' + locus_point)
-        mags = synth([1.,0,0,0],[[stitchSpec]],filter(lambda x: string.find(x['filter'],'TMASS') == -1, filters + SDSS_filters)) 
 
+        ''' do not synthesize 2MASS filters '''
+        mags = synth([1.,0,0,0],[[stitchSpec]],filter(lambda x: string.find(x['filter'],'2MASS') == -1, filters + SDSS_filters)) 
+
+        ''' not synthesizing the 2MASS magnitudes '''
         for filt in filters:
-            if filt['filter'] == 'JTMASS.res':
-                mags[filt['mag']] = (mags['ZSDSS'] - c_locus['ZSDSS_JTMASS'][2*i]) #+ (mags['ISDSS'] - c_locus['ZSDSS_JTMASS'][2*i]))/2.
+            if filt['filter'] == 'J2MASS.res':
+
+                mags[filt['mag']] = (mags['ZSDSS'] - c_locus.data.field('ZSDSS_JTMASS')[locus_index]) #+ (mags['ISDSS'] - c_locus['ZSDSS_JTMASS'][2*i]))/2.
+
+
+                #print mags[filt['mag']], mags['ZSDSS'], c_locus.data.field('ZSDSS_JTMASS')
+                #raw_input()
 
         locus.append(mags)
 
@@ -128,7 +136,7 @@ def synthesize_expected_locus_for_observations(filters):
     return locus
 
 
-def parse_columns(columns_description, fitSDSS=False, noHoldExceptSDSS=False):
+def parse_columns(columns_description, fitSDSS=False, noHoldExceptSDSS=False, noHoldExcept2MASS=False):
     f = filter(lambda x: x[0] != '#', filter(lambda x: len(x) > 0, readtxtfile(columns_description)))
 
     input_info = [] 
@@ -143,6 +151,8 @@ def parse_columns(columns_description, fitSDSS=False, noHoldExceptSDSS=False):
 
         ''' do not hold any filter fixed if noHold is True '''
         if noHoldExceptSDSS and (dict['filter'][:4] != 'SDSS' and dict['filter'][:4] != 'sdss'):
+            dict['HOLD_VARY'] = 'VARY'
+        elif noHoldExcept2MASS and (dict['filter'][:4] != '2MASS'):
             dict['HOLD_VARY'] = 'VARY'
         else:
             dict['HOLD_VARY'] = l[3] 
