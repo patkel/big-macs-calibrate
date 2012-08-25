@@ -1,3 +1,3 @@
-MAG_APERCORR_reg1_g#$g$ MAG_APERCORR_reg1_g t2kb-kpno-g.res VARY
-MAG_APERCORR_reg1_r#$r$ MAG_APERCORR_reg1_r t2kb-kpno-r.res HOLD 0
-MAG_APERCORR_reg1_z#$z$ MAG_APERCORR_reg1_z t2kb-kpno-z.res VARY
+MAG_APERCORR_reg1_g#$g$ MAGERR_APERCORR_reg1_g t2kb-kpno-g.res VARY
+MAG_APERCORR_reg1_r#$r$ MAGERR_APERCORR_reg1_r t2kb-kpno-r.res HOLD 0
+MAG_APERCORR_reg1_z#$z$ MAGERR_APERCORR_reg1_z t2kb-kpno-z.res VARY
