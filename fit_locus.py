@@ -1510,6 +1510,5 @@ if __name__ == '__main__':
     print 'finished importing libraries'
 
     print options.liveplot
-    raw_input()
     
     run(options.file,options.columns,output_directory=options.output,plots_directory=options.plots,extension=options.extension,racol=options.racol,deccol=options.deccol,bootstrap_num=options.bootstrap,live_plot=options.liveplot, add2MASS=options.add2MASSJ, addSDSS=options.addSDSSgriz,number_of_plots=options.numberofplots, sdssUnit=options.sdssUnit)    
