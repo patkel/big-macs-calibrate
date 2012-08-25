@@ -83,7 +83,7 @@ def cas_locus(fits=True):
 
     if fits:
         import pyfits
-        locus_list_mag = pyfits.open(os.environ['BIGMACS'] + 'lociCAS.fits')['STDTAB']
+        locus_list_mag = pyfits.open(os.environ['BIGMACS'] + '/lociCAS.fits')['STDTAB']
     else:
         import pickle
         f = open(os.environ['BIGMACS'] + 'lociCAS','r')
