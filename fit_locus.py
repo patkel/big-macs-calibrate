@@ -504,7 +504,8 @@ def run(file,columns_description,output_directory=None,plots_directory=None,exte
         ''' if no SDSS, see if there are 2MASS matches '''
         #input_info = utilities.parse_columns(columns_description,fitSDSS=False,noHoldExcept2MASS=True)
         for i in range(len(input_info)):
-            input_info[i]['HOLD_VARY'] = 'VARY'
+            if string.find(input_info[i]['filter'] , 'SDSS') == -1:
+                input_info[i]['HOLD_VARY'] = 'VARY'
 
         sdss_info = [{'mag':'j_m', 'plotName':'2MASS J', 'filter': 'J2MASS.res', 'mag_err': 'j_cmsig', 'HOLD_VARY':'HOLD', 'ZP':0.} ]
         for filt_dict in sdss_info:
