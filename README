@@ -71,16 +71,25 @@ Example:
 
     1) CALIBRATE ONLY COLORS (no SDSS or 2MASS magnitudes): 
 
-        python fit_locus.py --file ./EXAMPLES/MACS1347-11.stars.calibrated.cat --columns ./EXAMPLES/MACS1347-11.columns --extension 1 --bootstrap 5 --liveplot True     (run here from the installation directory) 
+        python fit_locus.py --file ./EXAMPLES/MACS1423+24.stars.calibrated.cat --columns ./EXAMPLES/MACS1423+24.qc.columns --extension 1 --bootstrap 5 --l -s (run here from the installation directory) 
+
+        This a catalog of Subaru SuprimeCam magnitudes where we hold the zeropoint of one of the bands constant. Here we include SDSS stars (only the faintest are not saturated) to 
+        get an approximate absolute ZP. Colors should be calibrated with high accuracy.
+        
         extension is the number or name of the extension of the table with the necessary magnitudes in the FITS file
         liveplot is responsible for whether 
         (type python fit_locus.py for other arguments)
 
-    2)
-        python fit_locus.py --file ./EXAMPLES/MACS1423+24.stars.calibrated.cat --columns ./EXAMPLES/MACS1423+24.qc.columns --extension 1 --bootstrap 5 --liveplot True     (run here from the installation directory) 
+    2) SDSS UNIT TEST 
+
+        python fit_locus.py --file ./EXAMPLES/MACS1423+24.stars.calibrated.cat --columns ./EXAMPLES/MACS1423+24.qc.columns --extension 1 --bootstrap 0 --l -s -u (run here from the installation directory) 
+
+        This unit test makes a catalog of all SDSS stars in field (not only those matched against) and then holds the z-band zeropoint fixed. 
 
     3) CALIBRATE ABSOLUTE ZP w/ 2MASS
-        python fit_locus.py --file ./EXAMPLES/kpno.fits --columns ./EXAMPLES/kpno.columns --extension 1 --bootstrap 5 --liveplot True -r ALPHA_J2000_reg2_i -d DELTA_J2000_reg2_i -j
+        python fit_locus.py --file ./EXAMPLES/kpno.fits --columns ./EXAMPLES/kpno.columns --extension 1 --bootstrap 5 -l -r ALPHA_J2000_reg2_i -d DELTA_J2000_reg2_i -j
+
+        This is a catalog of Kitt Peak photometry. Here we add 2MASS photometry to calibrate these magnitudes. A much smaller catalog than the Subaru catalog.  
 
 
 
