@@ -21,7 +21,7 @@ Incorporate SDSS photometry
 Automatically match against SDSS catalog
 
 Excellent for photometric redshifts
-See Figure below and accompanying paper
+See accompanying paper
 
 Advantages
 Calculates color transformation from SDSS to instrumental magnitudes automatically
