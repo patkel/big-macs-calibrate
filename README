@@ -29,6 +29,15 @@ Simultaneously solves for all zeropoint simultaneously using new, simplified alg
 SDSS stellar locus is dereddened for Milky Way dust extinction
 Improved zeropoint accuracy
 
+<p><img src="http://farm9.staticflickr.com/8283/7613582508_cbccece26e.jpg" /> </p>
+<p>Color calibration of photometry through nine Subaru SuprimeCam and CFHT MegaPrime filter 
+bands of the RXJ1347-11 galaxy cluster field. We simultaneously vary eight zeropoints 
+and hold one constant during the fit to maximize agreement between the instrumental stellar 
+locus and the model stellar locus. </p>
+
+<p><img src="http://farm8.staticflickr.com/7275/7723411818_8340373f95.jpg" /> </p>
+<p>Photometric redshifts computed after calibration with Big MACS software.  </p>
+
 =========================================================================
 
 Set environmental variables: 
