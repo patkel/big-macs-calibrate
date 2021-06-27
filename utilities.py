@@ -256,7 +256,7 @@ def compute_ext(filt, N=0.78):
     #print scipy.array([(filt_wavelength[i]) for i in range(len(filt_wavelength[:-1]))])
     #print scipy.array([fitzpatrick(filt_wavelength[i]) for i in range(len(filt_wavelength[:-1]))])
     numerator = scipy.array([10.**(fitzpatrick(filt_wavelength[i])/-2.5)*sedSpline(filt_wavelength[i])*filt_wavelength[i]*(filt_response[i])*(filt_wavelength[i+1]-filt_wavelength[i]) for i in range(len(filt_wavelength[:-1]))])
-    denom = scipy.array([source[i]*filt_wavelength[i]*(filt_response[i])*(filt_wavelength[i+1]-filt_wavelength[i]) for i in range(len(filt_wavelength[:-1]))])
+    denom = scipy.array([sedSpline(filt_wavelength[i])*filt_wavelength[i]*(filt_response[i])*(filt_wavelength[i+1]-filt_wavelength[i]) for i in range(len(filt_wavelength[:-1]))])
 
     coeff = -2.5*math.log10(numerator.sum()/denom.sum()) 
 
